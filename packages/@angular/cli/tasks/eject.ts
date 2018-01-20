@@ -90,6 +90,13 @@ class JsonWebpackSerializer {
     };
   }
 
+  private _bundleBudgetPluginSerialize(value: any): any {
+    let budgets = value.options.budgets;
+    return {
+      budgets
+    };
+  }
+
   private _insertConcatAssetsWebpackPluginSerialize(value: any): any {
     return value.entryNames;
   }
@@ -199,6 +206,10 @@ class JsonWebpackSerializer {
         case angularCliPlugins.GlobCopyWebpackPlugin:
           args = this._globCopyWebpackPluginSerialize(plugin);
           this._addImport('@angular/cli/plugins/webpack', 'GlobCopyWebpackPlugin');
+          break;
+        case angularCliPlugins.BundleBudgetPlugin:
+          args = this._bundleBudgetPluginSerialize(plugin);
+          this._addImport('@angular/cli/plugins/webpack', 'BundleBudgetPlugin');
           break;
         case angularCliPlugins.InsertConcatAssetsWebpackPlugin:
           args = this._insertConcatAssetsWebpackPluginSerialize(plugin);
