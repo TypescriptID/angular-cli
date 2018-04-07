@@ -4,7 +4,7 @@ import { NodeJsSyncHost } from '@angular-devkit/core/node';
 import { ArgumentStrategy, Command, Option } from './command';
 import { NodeWorkflow } from '@angular-devkit/schematics/tools';
 import { DryRunEvent, UnsuccessfulWorkflowExecution } from '@angular-devkit/schematics';
-import { getPackageManager } from '../utilities/config';
+import { getPackageManager, getDefaultSchematicCollection } from '../utilities/config';
 import { getCollection, getSchematic } from '../utilities/schematics';
 import { take } from 'rxjs/operators';
 import { WorkspaceLoader } from '../models/workspace-loader';
@@ -85,12 +85,12 @@ export abstract class SchematicCommand extends Command {
     const loggingQueue: string[] = [];
     const fsHost = new virtualFs.ScopedHost(new NodeJsSyncHost(), normalize(this.project.root));
     const workflow = new NodeWorkflow(
-      fsHost,
+      fsHost as any,
       {
         force,
         dryRun,
         packageManager: getPackageManager(),
-        root: normalize(this.project.root),
+        root: this.project.root,
        },
     );
 
@@ -149,7 +149,7 @@ export abstract class SchematicCommand extends Command {
         schematic: schematicName,
         options: schematicOptions,
         debug: debug,
-        logger: this.logger,
+        logger: this.logger as any,
         allowPrivate: this.allowPrivateSchematics,
       })
         .subscribe({
@@ -197,8 +197,7 @@ export abstract class SchematicCommand extends Command {
     // Make a copy.
     this._originalOptions = [...this.options];
 
-    // TODO: get default collectionName
-    const collectionName = options.collectionName || '@schematics/angular';
+    const collectionName = options.collectionName || getDefaultSchematicCollection();
 
     const collection = getCollection(collectionName);
 
