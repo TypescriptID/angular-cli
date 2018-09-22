@@ -64,7 +64,8 @@
     },
     "sourceMap": {
       "type": "boolean",
-      "description": "Output sourcemaps."
+      "description": "Output sourcemaps.",
+      "default": true
     },
     "vendorSourceMap": {
       "type": "boolean",
@@ -174,6 +175,13 @@
             "output": {
               "type": "string",
               "description": "Absolute path within the output."
+            },
+            "ignore": {
+              "description": "An array of globs to ignore.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "additionalProperties": false,

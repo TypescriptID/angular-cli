@@ -108,7 +108,7 @@
               "default": false,
               "alias": "t"
             },
-            "module":  {
+            "module": {
               "type": "string",
               "description": "Allows specification of the declaring module.",
               "alias": "m"
@@ -160,7 +160,7 @@
               "description": "Flag to indicate if a dir is created.",
               "default": true
             },
-            "module":  {
+            "module": {
               "type": "string",
               "description": "Allows specification of the declaring module.",
               "alias": "m"
@@ -219,7 +219,7 @@
               "default": true,
               "visible": false
             },
-            "module":  {
+            "module": {
               "type": "string",
               "description": "Allows specification of the declaring module.",
               "alias": "m"
@@ -327,11 +327,39 @@
           "additionalProperties": {
             "$ref": "#/definitions/project/definitions/target"
           }
+        },
+        "targets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/project/definitions/target"
+          }
         }
       },
       "required": [
         "root",
         "projectType"
+      ],
+      "anyOf": [
+        {
+          "required": ["architect"],
+          "not": {
+            "required": ["targets"]
+          }
+        },
+        {
+          "required": ["targets"],
+          "not": {
+            "required": ["architect"]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "targets",
+              "architect"
+            ]
+          }
+        }
       ],
       "additionalProperties": false,
       "patternProperties": {
@@ -778,6 +806,13 @@
                     "output": {
                       "type": "string",
                       "description": "Absolute path within the output."
+                    },
+                    "ignore": {
+                      "description": "An array of globs to ignore.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "additionalProperties": false,
@@ -1241,6 +1276,13 @@
                     "output": {
                       "type": "string",
                       "description": "Absolute path within the output."
+                    },
+                    "ignore": {
+                      "description": "An array of globs to ignore.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "additionalProperties": false,
@@ -1541,7 +1583,6 @@
                 }
               ]
             }
-
           }
         },
         "tslint": {

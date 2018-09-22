@@ -6,7 +6,6 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import { SchematicTestRunner, UnitTestTree } from '@angular-devkit/schematics/testing';
-import * as path from 'path';
 import { Schema as ApplicationOptions } from '../application/schema';
 import { Schema as WorkspaceOptions } from '../workspace/schema';
 import { Schema as ModuleOptions } from './schema';
@@ -15,11 +14,10 @@ import { Schema as ModuleOptions } from './schema';
 describe('Module Schematic', () => {
   const schematicRunner = new SchematicTestRunner(
     '@schematics/angular',
-    path.join(__dirname, '../collection.json'),
+    require.resolve('../collection.json'),
   );
   const defaultOptions: ModuleOptions = {
     name: 'foo',
-    spec: true,
     module: undefined,
     flat: false,
     project: 'bar',
@@ -51,7 +49,6 @@ describe('Module Schematic', () => {
 
     const tree = schematicRunner.runSchematic('module', options, appTree);
     const files = tree.files;
-    expect(files.indexOf('/projects/bar/src/app/foo/foo.module.spec.ts')).toBeGreaterThanOrEqual(0);
     expect(files.indexOf('/projects/bar/src/app/foo/foo.module.ts')).toBeGreaterThanOrEqual(0);
   });
 
@@ -61,6 +58,15 @@ describe('Module Schematic', () => {
     const tree = schematicRunner.runSchematic('module', options, appTree);
     const content = tree.readContent('/projects/bar/src/app/app.module.ts');
     expect(content).toMatch(/import { FooModule } from '.\/foo\/foo.module'/);
+    expect(content).toMatch(/imports: \[[^\]]*FooModule[^\]]*\]/m);
+  });
+
+  it('should import into another module when using flat', () => {
+    const options = { ...defaultOptions, flat: true, module: 'app.module.ts' };
+
+    const tree = schematicRunner.runSchematic('module', options, appTree);
+    const content = tree.readContent('/projects/bar/src/app/app.module.ts');
+    expect(content).toMatch(/import { FooModule } from '.\/foo.module'/);
     expect(content).toMatch(/imports: \[[^\]]*FooModule[^\]]*\]/m);
   });
 
@@ -96,23 +102,12 @@ describe('Module Schematic', () => {
     expect(routingModuleContent).toMatch(/RouterModule.forChild\(routes\)/);
   });
 
-  it('should respect the spec flag', () => {
-    const options = { ...defaultOptions, spec: false };
-
-    const tree = schematicRunner.runSchematic('module', options, appTree);
-    const files = tree.files;
-    expect(files.indexOf('/projects/bar/src/app/foo/foo.module.ts')).toBeGreaterThanOrEqual(0);
-    expect(files.indexOf('/projects/bar/src/app/foo/foo.module.spec.ts')).toEqual(-1);
-  });
-
   it('should dasherize a name', () => {
     const options = { ...defaultOptions, name: 'TwoWord' };
 
     const tree = schematicRunner.runSchematic('module', options, appTree);
     const files = tree.files;
     expect(files.indexOf('/projects/bar/src/app/two-word/two-word.module.ts'))
-      .toBeGreaterThanOrEqual(0);
-    expect(files.indexOf('/projects/bar/src/app/two-word/two-word.module.spec.ts'))
       .toBeGreaterThanOrEqual(0);
   });
 

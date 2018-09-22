@@ -6,10 +6,7 @@
  * found in the LICENSE file at https://angular.io/license
  */
 import { terminal } from '@angular-devkit/core';
-import * as ts from 'typescript';
-import { time, timeEnd } from './benchmark';
-import { WebpackCompilerHost } from './compiler_host';
-import { CancellationToken, gatherDiagnostics } from './gather_diagnostics';
+import { NodeJsSyncHost } from '@angular-devkit/core/node';
 import {
   CompilerHost,
   CompilerOptions,
@@ -17,7 +14,11 @@ import {
   createCompilerHost,
   createProgram,
   formatDiagnostics,
-} from './ngtools_api';
+} from '@angular/compiler-cli';
+import * as ts from 'typescript';
+import { time, timeEnd } from './benchmark';
+import { WebpackCompilerHost } from './compiler_host';
+import { CancellationToken, gatherDiagnostics } from './gather_diagnostics';
 
 
 // This file should run in a child process with the AUTO_START_ARG argument
@@ -62,8 +63,11 @@ export class TypeChecker {
     private _rootNames: string[],
   ) {
     time('TypeChecker.constructor');
-    const compilerHost = new WebpackCompilerHost(_compilerOptions, _basePath);
-    compilerHost.enableCaching();
+    const compilerHost = new WebpackCompilerHost(
+      _compilerOptions,
+      _basePath,
+      new NodeJsSyncHost(),
+    );
     // We don't set a async resource loader on the compiler host because we only support
     // html templates, which are the only ones that can throw errors, and those can be loaded
     // synchronously.
@@ -128,7 +132,7 @@ export class TypeChecker {
 
       if (warnings.length > 0) {
         const message = formatDiagnostics(warnings);
-        console.log(terminal.bold(terminal.yellow('WARNING in ' + message)));
+        console.error(terminal.bold(terminal.yellow('WARNING in ' + message)));
       }
     }
   }

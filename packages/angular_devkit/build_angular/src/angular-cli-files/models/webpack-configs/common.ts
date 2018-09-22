@@ -24,7 +24,7 @@ import { normalizeExtraEntryPoints } from './utils';
 
 const ProgressPlugin = require('webpack/lib/ProgressPlugin');
 const CircularDependencyPlugin = require('circular-dependency-plugin');
-const UglifyJSPlugin = require('uglifyjs-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 const StatsPlugin = require('stats-webpack-plugin');
 
 /**
@@ -125,6 +125,7 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
         context: asset.input,
         // Now we remove starting slash to make Webpack place it from the output root.
         to: asset.output.replace(/^\//, ''),
+        ignore: asset.ignore,
         from: {
           glob: asset.glob,
           dot: true
@@ -208,7 +209,7 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
   const isIvyEnabled = wco.tsConfig.raw.angularCompilerOptions
                     && wco.tsConfig.raw.angularCompilerOptions.enableIvy;
 
-  const uglifyOptions = {
+  const terserOptions = {
     ecma: wco.supportES2015 ? 6 : 5,
     warnings: !!buildOptions.verbose,
     safari10: true,
@@ -229,10 +230,6 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
       // PURE comments work best with 3 passes.
       // See https://github.com/webpack/webpack/issues/2899#issuecomment-317425926.
       passes: buildOptions.buildOptimizer ? 3 : 1,
-      // Workaround known uglify-es issue
-      // See https://github.com/mishoo/UglifyJS2/issues/2949#issuecomment-368070307
-      inline: wco.supportES2015 ? 1 : 3,
-
       global_defs: {
         ngDevMode: false,
       },
@@ -274,19 +271,10 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
       rules: [
         { test: /\.html$/, loader: 'raw-loader' },
         {
-          test: /\.(eot|svg|cur)$/,
+          test: /\.(eot|svg|cur|jpg|png|webp|gif|otf|ttf|woff|woff2|ani)$/,
           loader: 'file-loader',
           options: {
             name: `[name]${hashFormat.file}.[ext]`,
-            limit: 10000
-          }
-        },
-        {
-          test: /\.(jpg|png|webp|gif|otf|ttf|woff|woff2|ani)$/,
-          loader: 'url-loader',
-          options: {
-            name: `[name]${hashFormat.file}.[ext]`,
-            limit: 10000
           }
         },
         {
@@ -318,11 +306,11 @@ export function getCommonConfig(wco: WebpackConfigOptions) {
           // component styles retain their original file name
           test: (file) => /\.(?:css|scss|sass|less|styl)$/.test(file),
         }),
-        new UglifyJSPlugin({
+        new TerserPlugin({
           sourceMap: buildOptions.sourceMap,
           parallel: true,
           cache: true,
-          uglifyOptions,
+          terserOptions,
         }),
       ],
     },

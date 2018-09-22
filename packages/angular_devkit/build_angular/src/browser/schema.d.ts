@@ -49,7 +49,7 @@ export interface BrowserBuilderSchema {
   /**
    * Replace files with other files in the build.
    */
-  fileReplacements: FileReplacements[];
+  fileReplacements: FileReplacement[];
 
   /**
    * Path where output will be placed.
@@ -236,6 +236,11 @@ export interface AssetPatternObject {
    * The input path dir in which to apply 'glob'. Defaults to the project root.
    */
   input: string;
+
+  /**
+   * 	An array of globs to ignore.
+   */
+  ignore?: string[];
 
   /**
    * Absolute path within the output.

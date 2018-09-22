@@ -20,13 +20,13 @@ export default function () {
 
   let platformServerVersion = readNgVersion();
 
-  if (getGlobalVariable('argv').nightly) {
+  if (getGlobalVariable('argv')['ng-snapshots']) {
     platformServerVersion = 'github:angular/platform-server-builds';
   }
 
   return Promise.resolve()
     .then(() => updateJsonFile('angular.json', workspaceJson => {
-      const appArchitect = workspaceJson.projects['test-project'].targets;
+      const appArchitect = workspaceJson.projects['test-project'].architect;
       appArchitect['server'] = {
         builder: '@angular-devkit/build-angular:server',
         options: {

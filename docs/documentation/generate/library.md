@@ -3,7 +3,10 @@
 # ng generate library
 
 ## Overview
-Generate a library project for Angular.
+`ng generate library [name]` generates a library project for Angular.
+
+## Alias
+lib - `ng generate lib [name]`
 
 ## Options
 <details>
@@ -57,7 +60,7 @@ Generate a library project for Angular.
     <code>--skip-install</code>
   </p>
   <p>
-    Do not add dependencies to package.json.
+    Skip installing dependency packages.
   </p>
 </details>
 <details>
