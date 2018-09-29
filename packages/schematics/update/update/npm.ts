@@ -33,15 +33,21 @@ function _readNpmRc(): Observable<{ [key: string]: string }> {
     // TODO: have a way to read options without using fs directly.
     const path = require('path');
     const fs = require('fs');
+    const perProjectNpmrc = path.resolve('.npmrc');
 
     let npmrc = '';
-    if (process.platform === 'win32') {
-      if (process.env.LOCALAPPDATA) {
-        npmrc = fs.readFileSync(path.join(process.env.LOCALAPPDATA, '.npmrc')).toString('utf-8');
-      }
+
+    if (fs.existsSync(perProjectNpmrc)) {
+      npmrc = fs.readFileSync(perProjectNpmrc).toString('utf-8');
     } else {
-      if (process.env.HOME) {
-        npmrc = fs.readFileSync(path.join(process.env.HOME, '.npmrc')).toString('utf-8');
+      if (process.platform === 'win32') {
+        if (process.env.LOCALAPPDATA) {
+          npmrc = fs.readFileSync(path.join(process.env.LOCALAPPDATA, '.npmrc')).toString('utf-8');
+        }
+      } else {
+        if (process.env.HOME) {
+          npmrc = fs.readFileSync(path.join(process.env.HOME, '.npmrc')).toString('utf-8');
+        }
       }
     }
 
@@ -50,7 +56,7 @@ function _readNpmRc(): Observable<{ [key: string]: string }> {
 
     allOptionsArr.forEach(x => {
       const [key, ...value] = x.split('=');
-      allOptions[key] = value.join('=');
+      allOptions[key.trim()] = value.join('=').trim();
     });
 
     subject.next(allOptions);
@@ -192,7 +198,8 @@ export function getNpmPackageJson(
         getNpmConfigOption('_authToken', registryKey),
         getNpmConfigOption('username', registryKey, true),
         getNpmConfigOption('password', registryKey, true),
-        getNpmConfigOption('alwaysAuth', registryKey, true),
+        getNpmConfigOption('email', registryKey, true),
+        getNpmConfigOption('always-auth', registryKey, true),
       ).pipe(
         toArray(),
         concatMap(options => {
@@ -205,6 +212,7 @@ export function getNpmPackageJson(
             authToken,
             username,
             password,
+            email,
             alwaysAuth,
           ] = options;
 
@@ -216,17 +224,38 @@ export function getNpmPackageJson(
             token?: string,
             alwaysAuth?: boolean;
             username?: string;
-            password?: string
+            password?: string;
+            email?: string;
           } = {};
 
           if (alwaysAuth !== undefined) {
             auth.alwaysAuth = alwaysAuth === 'false' ? false : !!alwaysAuth;
           }
 
+          if (email) {
+            auth.email = email;
+          }
+
           if (authToken) {
             auth.token = authToken;
           } else if (token) {
-            auth.token = token;
+            try {
+              // attempt to parse "username:password" from base64 token
+              // to enable Artifactory / Nexus-like repositories support
+              const delimiter = ':';
+              const parsedToken = Buffer.from(token, 'base64').toString('ascii');
+              const [extractedUsername, ...passwordArr] = parsedToken.split(delimiter);
+              const extractedPassword = passwordArr.join(delimiter);
+
+              if (extractedUsername && extractedPassword) {
+                auth.username = extractedUsername;
+                auth.password = extractedPassword;
+              } else {
+                throw new Error('Unable to extract username and password from _auth token');
+              }
+            } catch (ex) {
+              auth.token = token;
+            }
           } else if (username) {
             auth.username = username;
             auth.password = password;

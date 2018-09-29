@@ -54,6 +54,8 @@ function _coerceType(str: string | undefined, type: OptionType, v?: Value): Valu
     case OptionType.Number:
       if (str === undefined) {
         return 0;
+      } else if (str === '') {
+        return undefined;
       } else if (Number.isFinite(+str)) {
         return +str;
       } else {
@@ -269,10 +271,6 @@ export function parseArguments(args: string[], options: Option[] | null): Argume
   const errors: string[] = [];
 
   for (let arg = args.shift(); arg !== undefined; arg = args.shift()) {
-    if (!arg) {
-      break;
-    }
-
     if (arg == '--') {
       // If we find a --, we're done.
       leftovers.push(...args);
@@ -285,6 +283,12 @@ export function parseArguments(args: string[], options: Option[] | null): Argume
       // Argument is of form -abcdef.  Starts at 1 because we skip the `-`.
       for (let i = 1; i < arg.length; i++) {
         const flag = arg[i];
+        // If the next character is an '=', treat it as a long flag.
+        if (arg[i + 1] == '=') {
+          const f = '--' + flag + arg.slice(i + 1);
+          _assignOption(f, args, options, parsedOptions, positionals, leftovers, ignored, errors);
+          break;
+        }
         // Treat the last flag as `--a` (as if full flag but just one letter). We do this in
         // the loop because it saves us a check to see if the arg is just `-`.
         if (i == arg.length - 1) {
@@ -306,6 +310,8 @@ export function parseArguments(args: string[], options: Option[] | null): Argume
   }
 
   // Deal with positionals.
+  // TODO(hansl): this is by far the most complex piece of code in this file. Try to refactor it
+  //   simpler.
   if (positionals.length > 0) {
     let pos = 0;
     for (let i = 0; i < positionals.length;) {
@@ -315,10 +321,11 @@ export function parseArguments(args: string[], options: Option[] | null): Argume
 
       // We do this with a found flag because more than 1 option could have the same positional.
       for (const option of options) {
-        // If any option has this positional and no value, we need to remove it.
+        // If any option has this positional and no value, AND fit the type, we need to remove it.
         if (option.positional === pos) {
-          if (parsedOptions[option.name] === undefined) {
-            parsedOptions[option.name] = positionals[i];
+          const coercedValue = _coerce(positionals[i], option, parsedOptions[option.name]);
+          if (parsedOptions[option.name] === undefined && coercedValue !== undefined) {
+            parsedOptions[option.name] = coercedValue;
             found = true;
           } else {
             incrementI = false;

@@ -13,12 +13,12 @@ import { DevServerBuilderOptions } from '../../src';
 import { devServerTargetSpec, host } from '../utils';
 
 
-describe('Dev Server Builder serve path', () => {
+describe('Dev Server Deploy Url', () => {
   beforeEach(done => host.initialize().toPromise().then(done, done.fail));
   afterEach(done => host.restore().toPromise().then(done, done.fail));
 
   it('works', (done) => {
-    const overrides: Partial<DevServerBuilderOptions> = { servePath: 'test/' };
+    const overrides: Partial<DevServerBuilderOptions> = { deployUrl: 'test/' };
 
     runTargetSpec(host, devServerTargetSpec, overrides).pipe(
       tap((buildEvent) => expect(buildEvent.success).toBe(true)),
