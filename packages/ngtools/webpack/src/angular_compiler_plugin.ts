@@ -5,7 +5,16 @@
  * Use of this source code is governed by an MIT-style license that can be
  * found in the LICENSE file at https://angular.io/license
  */
-import { Path, dirname, getSystemPath, normalize, resolve, virtualFs } from '@angular-devkit/core';
+import {
+  Path,
+  dirname,
+  getSystemPath,
+  logging,
+  normalize,
+  resolve,
+  virtualFs,
+} from '@angular-devkit/core';
+import { createConsoleLogger } from '@angular-devkit/core/node';
 import {
   CompilerHost,
   CompilerOptions,
@@ -45,7 +54,15 @@ import {
   replaceServerBootstrap,
 } from './transformers';
 import { collectDeepNodes } from './transformers/ast_helpers';
-import { AUTO_START_ARG, InitMessage, UpdateMessage } from './type_checker';
+import {
+  AUTO_START_ARG,
+} from './type_checker';
+import {
+  InitMessage,
+  LogMessage,
+  MESSAGE_KIND,
+  UpdateMessage,
+} from './type_checker_messages';
 import {
   VirtualFileSystemDecorator,
   VirtualWatchFileSystemDecorator,
@@ -59,7 +76,7 @@ import { WebpackInputHost } from './webpack-input-host';
 
 const treeKill = require('tree-kill');
 
-export interface ContextElementDependency {}
+export interface ContextElementDependency { }
 
 export interface ContextElementDependencyConstructor {
   new(modulePath: string, name: string): ContextElementDependency;
@@ -85,6 +102,7 @@ export interface AngularCompilerPluginOptions {
   missingTranslation?: string;
   platform?: PLATFORM;
   nameLazyFiles?: boolean;
+  logger?: logging.Logger;
 
   // added to the list of lazy routes
   additionalLazyModules?: { [module: string]: string };
@@ -141,6 +159,9 @@ export class AngularCompilerPlugin {
   private _typeCheckerProcess: ChildProcess | null;
   private _forkedTypeCheckerInitialized = false;
 
+  // Logging.
+  private _logger: logging.Logger;
+
   private get _ngCompilerSupportsNewApi() {
     if (this._JitMode) {
       return false;
@@ -179,6 +200,8 @@ export class AngularCompilerPlugin {
 
   private _setupOptions(options: AngularCompilerPluginOptions) {
     time('AngularCompilerPlugin._setupOptions');
+    this._logger = options.logger || createConsoleLogger();
+
     // Fill in the missing options.
     if (!options.hasOwnProperty('tsConfigPath')) {
       throw new Error('Must specify "tsConfigPath" in the configuration of @ngtools/webpack.');
@@ -415,7 +438,7 @@ export class AngularCompilerPlugin {
         }),
         // TODO: fix compiler-cli typings; entryModule should not be string, but also optional.
         // tslint:disable-next-line:no-non-null-assertion
-        entryModule: this._entryModule !,
+        entryModule: this._entryModule!,
       });
       timeEnd('AngularCompilerPlugin._getLazyRoutesFromNgtools');
 
@@ -542,6 +565,18 @@ export class AngularCompilerPlugin {
       forkArgs,
       forkOptions);
 
+    // Handle child messages.
+    this._typeCheckerProcess.on('message', message => {
+      switch (message.kind) {
+        case MESSAGE_KIND.Log:
+          const logMessage = message as LogMessage;
+          this._logger.log(logMessage.level, logMessage.message);
+          break;
+        default:
+          throw new Error(`TypeChecker: Unexpected message received: ${message}.`);
+      }
+    });
+
     // Handle child process exit.
     this._typeCheckerProcess.once('exit', (_, signal) => {
       this._typeCheckerProcess = null;
@@ -567,8 +602,13 @@ export class AngularCompilerPlugin {
   private _updateForkedTypeChecker(rootNames: string[], changedCompilationFiles: string[]) {
     if (this._typeCheckerProcess) {
       if (!this._forkedTypeCheckerInitialized) {
+        let hostReplacementPaths = {};
+        if (this._options.hostReplacementPaths
+          && typeof this._options.hostReplacementPaths != 'function') {
+          hostReplacementPaths = this._options.hostReplacementPaths;
+        }
         this._typeCheckerProcess.send(new InitMessage(this._compilerOptions, this._basePath,
-          this._JitMode, this._rootNames));
+          this._JitMode, this._rootNames, hostReplacementPaths));
         this._forkedTypeCheckerInitialized = true;
       }
       this._typeCheckerProcess.send(new UpdateMessage(rootNames, changedCompilationFiles));
@@ -748,10 +788,10 @@ export class AngularCompilerPlugin {
               const name = request.request;
               const issuer = request.contextInfo.issuer;
               if (name.endsWith('.ts') || name.endsWith('.tsx')
-                  || (issuer && /\.ts|ngfactory\.js$/.test(issuer))) {
+                || (issuer && /\.ts|ngfactory\.js$/.test(issuer))) {
                 try {
                   await this.done;
-                } catch {}
+                } catch { }
               }
             }
 

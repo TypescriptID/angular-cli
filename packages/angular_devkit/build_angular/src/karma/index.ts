@@ -73,9 +73,13 @@ export class KarmaBuilder implements Builder<KarmaBuilderSchema> {
 
         if (options.reporters) {
           // Split along commas to make it more natural, and remove empty strings.
-          karmaOptions.reporters = options.reporters
+          const reporters = options.reporters
             .reduce<string[]>((acc, curr) => acc.concat(curr.split(/,/)), [])
             .filter(x => !!x);
+
+          if (reporters.length > 0) {
+            karmaOptions.reporters = reporters;
+          }
         }
 
         const sourceRoot = builderConfig.sourceRoot && resolve(root, builderConfig.sourceRoot);
@@ -89,6 +93,10 @@ export class KarmaBuilder implements Builder<KarmaBuilderSchema> {
           // Pass onto Karma to emit BuildEvents.
           successCb: () => obs.next({ success: true }),
           failureCb: () => obs.next({ success: false }),
+          // Workaround for https://github.com/karma-runner/karma/issues/3154
+          // When this workaround is removed, user projects need to be updated to use a Karma
+          // version that has a fix for this issue.
+          toJSON: () => { },
         };
 
         // TODO: inside the configs, always use the project root and not the workspace root.
@@ -139,6 +147,7 @@ export class KarmaBuilder implements Builder<KarmaBuilderSchema> {
 
     wco = {
       root: getSystemPath(root),
+      logger: this.context.logger,
       projectRoot: getSystemPath(projectRoot),
       sourceRoot: sourceRoot && getSystemPath(sourceRoot),
       // TODO: use only this.options, it contains all flags and configs items already.
