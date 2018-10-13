@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/schema",
   "$id": "ng-cli://commands/e2e.json",
-  "description": "Runs the end-to-end tests.",
-  "$longDescription": "",
+  "description": "Builds and serves an Angular app, and runs end-to-end tests using Protractor.",
+  "$longDescription": "./e2e-long.md",
 
   "$aliases": [ "e" ],
   "$scope": "in",
