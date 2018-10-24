@@ -40,10 +40,10 @@ import { time, timeEnd } from './benchmark';
 import { WebpackCompilerHost, workaroundResolve } from './compiler_host';
 import { resolveEntryModuleFromMain } from './entry_resolver';
 import { gatherDiagnostics, hasErrors } from './gather_diagnostics';
-import { LazyRouteMap, findLazyRoutes } from './lazy_routes';
 import { TypeScriptPathsPlugin } from './paths-plugin';
 import { WebpackResourceLoader } from './resource_loader';
 import {
+  LazyRouteMap,
   exportLazyModuleMap,
   exportNgFactory,
   findResources,
@@ -410,28 +410,19 @@ export class AngularCompilerPlugin {
     }
 
     // If there's still no entryModule try to resolve from mainPath.
-    if (!this._entryModule && this._mainPath) {
+    if (!this._entryModule && this._mainPath && !this._compilerOptions.enableIvy) {
       time('AngularCompilerPlugin._make.resolveEntryModuleFromMain');
       this._entryModule = resolveEntryModuleFromMain(
         this._mainPath, this._compilerHost, this._getTsProgram() as ts.Program);
+
+      if (!this.entryModule) {
+        this._warnings.push('Lazy routes discovery is not enabled. '
+          + 'Because there is neither an entryModule nor a '
+          + 'statically analyzable bootstrap code in the main file.',
+        );
+      }
       timeEnd('AngularCompilerPlugin._make.resolveEntryModuleFromMain');
     }
-  }
-
-  private _findLazyRoutesInAst(changedFilePaths: string[]): LazyRouteMap {
-    time('AngularCompilerPlugin._findLazyRoutesInAst');
-    const result: LazyRouteMap = Object.create(null);
-    for (const filePath of changedFilePaths) {
-      const fileLazyRoutes = findLazyRoutes(filePath, this._compilerHost, undefined,
-        this._compilerOptions);
-      for (const routeKey of Object.keys(fileLazyRoutes)) {
-        const route = fileLazyRoutes[routeKey];
-        result[routeKey] = route;
-      }
-    }
-    timeEnd('AngularCompilerPlugin._findLazyRoutesInAst');
-
-    return result;
   }
 
   private _listLazyRoutesFromProgram(): LazyRouteMap {
@@ -876,17 +867,12 @@ export class AngularCompilerPlugin {
     // We need to run the `listLazyRoutes` the first time because it also navigates libraries
     // and other things that we might miss using the (faster) findLazyRoutesInAst.
     // Lazy routes modules will be read with compilerHost and added to the changed files.
-    if (this._firstRun || !this._JitMode) {
-      this._processLazyRoutes(this._listLazyRoutesFromProgram());
-    } else {
-      const changedTsFiles = this._getChangedTsFiles();
-      if (changedTsFiles.length > 0) {
-        this._processLazyRoutes(this._findLazyRoutesInAst(changedTsFiles));
-      }
-    }
-    if (this._options.additionalLazyModules) {
-      this._processLazyRoutes(this._options.additionalLazyModules);
-    }
+    const lazyRouteMap: LazyRouteMap = {
+      ... (this._entryModule || !this._JitMode ? this._listLazyRoutesFromProgram() : {}),
+      ...this._options.additionalLazyModules,
+    };
+
+    this._processLazyRoutes(lazyRouteMap);
 
     // Emit and report errors.
 
