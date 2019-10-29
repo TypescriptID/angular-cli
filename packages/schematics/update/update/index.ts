@@ -113,19 +113,24 @@ function _validateForwardPeerDependencies(
   name: string,
   infoMap: Map<string, PackageInfo>,
   peers: {[name: string]: string},
+  peersMeta: { [name: string]: { optional?: boolean }},
   logger: logging.LoggerApi,
   next: boolean,
 ): boolean {
+  let validationFailed = false;
   for (const [peer, range] of Object.entries(peers)) {
     logger.debug(`Checking forward peer ${peer}...`);
     const maybePeerInfo = infoMap.get(peer);
+    const isOptional = peersMeta[peer] && !!peersMeta[peer].optional;
     if (!maybePeerInfo) {
-      logger.warn([
-        `Package ${JSON.stringify(name)} has a missing peer dependency of`,
-        `${JSON.stringify(peer)} @ ${JSON.stringify(range)}.`,
-      ].join(' '));
+      if (!isOptional) {
+        logger.warn([
+          `Package ${JSON.stringify(name)} has a missing peer dependency of`,
+          `${JSON.stringify(peer)} @ ${JSON.stringify(range)}.`,
+        ].join(' '));
+      }
 
-      return false;
+      continue;
     }
 
     const peerVersion = maybePeerInfo.target && maybePeerInfo.target.packageJson.version
@@ -140,11 +145,12 @@ function _validateForwardPeerDependencies(
         `would install ${JSON.stringify(peerVersion)})`,
       ].join(' '));
 
-      return true;
+      validationFailed = true;
+      continue;
     }
   }
 
-  return false;
+  return validationFailed;
 }
 
 
@@ -209,8 +215,9 @@ function _validateUpdatePackages(
     const pkgLogger = logger.createChild(name);
     logger.debug(`${name}...`);
 
-    const peers = target.packageJson.peerDependencies || {};
-    peerErrors = _validateForwardPeerDependencies(name, infoMap, peers, pkgLogger, next) || peerErrors;
+    const { peerDependencies = {}, peerDependenciesMeta = {} } = target.packageJson;
+    peerErrors = _validateForwardPeerDependencies(name, infoMap, peerDependencies,
+      peerDependenciesMeta, pkgLogger, next) || peerErrors;
     peerErrors
       = _validateReversePeerDependencies(name, target.version, infoMap, pkgLogger, next)
       || peerErrors;
