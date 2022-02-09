@@ -1,0 +1,49 @@
+name: OpenSSF Scorecard
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '0 2 * * 0'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Declare default permissions as read only.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecards analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to upload the results to code-scanning dashboard.
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: 'Checkout code'
+        uses: actions/checkout@230611dbd0eb52da1e1f4f7bc8bb0c3a339fc8b7
+        with:
+          persist-credentials: false
+
+      - name: 'Run analysis'
+        uses: ossf/scorecard-action@315c15e2156166631fd4cb10d6490514eb3fd74a
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_results: true
+
+      # Upload the results as artifacts.
+      - name: 'Upload artifact'
+        uses: actions/upload-artifact@2244c8200304ec9588bf9399eac622d9fadc28c4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      # Upload the results to GitHub's code scanning dashboard.
+      - name: 'Upload to code-scanning'
+        uses: github/codeql-action/upload-sarif@edd03fbd2c9728a78e2e10ff69c4af455b0de4fd
+        with:
+          sarif_file: results.sarif
