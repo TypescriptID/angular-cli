@@ -26,34 +26,27 @@ const { outputMode, hasSsrEntry } = workerData as {
   hasSsrEntry: boolean;
 };
 
-let serverURL = DEFAULT_URL;
-
 /** Renders an application based on a provided options. */
 async function extractRoutes(): Promise<RoutersExtractorWorkerResult> {
+  const serverURL = outputMode !== undefined && hasSsrEntry ? await launchServer() : DEFAULT_URL;
+
+  patchFetchToLoadInMemoryAssets(serverURL);
+
   const { ɵextractRoutesAndCreateRouteTree: extractRoutesAndCreateRouteTree } =
     await loadEsmModuleFromMemory('./main.server.mjs');
 
-  const { routeTree, errors } = await extractRoutesAndCreateRouteTree(
-    serverURL,
-    undefined /** manifest */,
-    true /** invokeGetPrerenderParams */,
-    outputMode === OutputMode.Server /** includePrerenderFallbackRoutes */,
-  );
+  const { routeTree, appShellRoute, errors } = await extractRoutesAndCreateRouteTree({
+    url: serverURL,
+    invokeGetPrerenderParams: outputMode !== undefined,
+    includePrerenderFallbackRoutes: outputMode === OutputMode.Server,
+    signal: AbortSignal.timeout(30_000),
+  });
 
   return {
     errors,
+    appShellRoute,
     serializedRouteTree: routeTree.toObject(),
   };
 }
 
-async function initialize() {
-  if (outputMode !== undefined && hasSsrEntry) {
-    serverURL = await launchServer();
-  }
-
-  patchFetchToLoadInMemoryAssets(serverURL);
-
-  return extractRoutes;
-}
-
-export default initialize();
+export default extractRoutes;

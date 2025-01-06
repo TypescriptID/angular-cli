@@ -40,6 +40,7 @@ export interface CompilerPluginOptions {
   sourcemap: boolean | 'external';
   tsconfig: string;
   jit?: boolean;
+  browserOnlyBuild?: boolean;
 
   /** Skip TypeScript compilation setup. This is useful to re-use the TypeScript compilation from another plugin. */
   noopTypeScriptCompilation?: boolean;
@@ -119,7 +120,7 @@ export function createCompilerPlugin(
       // Create new reusable compilation for the appropriate mode based on the `jit` plugin option
       const compilation: AngularCompilation = pluginOptions.noopTypeScriptCompilation
         ? new NoopCompilation()
-        : await createAngularCompilation(!!pluginOptions.jit);
+        : await createAngularCompilation(!!pluginOptions.jit, !!pluginOptions.browserOnlyBuild);
       // Compilation is initially assumed to have errors until emitted
       let hasCompilationErrors = true;
 
@@ -153,7 +154,6 @@ export function createCompilerPlugin(
         let modifiedFiles;
         if (
           pluginOptions.sourceFileCache?.modifiedFiles.size &&
-          referencedFileTracker &&
           !pluginOptions.noopTypeScriptCompilation
         ) {
           // TODO: Differentiate between changed input files and stale output files
@@ -164,6 +164,8 @@ export function createCompilerPlugin(
           if (!pluginOptions.externalRuntimeStyles) {
             stylesheetBundler.invalidate(modifiedFiles);
           }
+          // Remove any stale additional results based on modified files
+          modifiedFiles.forEach((file) => additionalResults.delete(file));
         }
 
         if (
@@ -181,6 +183,7 @@ export function createCompilerPlugin(
           sourceFileCache: pluginOptions.sourceFileCache,
           async transformStylesheet(data, containingFile, stylesheetFile, order, className) {
             let stylesheetResult;
+            let resultSource = stylesheetFile ?? containingFile;
 
             // Stylesheet file only exists for external stylesheets
             if (stylesheetFile) {
@@ -196,13 +199,18 @@ export function createCompilerPlugin(
                 // invalid the output and force a full page reload for HMR cases. The containing file and order
                 // of the style within the containing file is used.
                 pluginOptions.externalRuntimeStyles
-                  ? createHash('sha-256')
+                  ? createHash('sha256')
                       .update(containingFile)
                       .update((order ?? 0).toString())
                       .update(className ?? '')
                       .digest('hex')
                   : undefined,
               );
+              // Adjust result source for inline styles.
+              // There may be multiple inline styles with the same containing file and to ensure that the results
+              // do not overwrite each other the result source identifier needs to be unique for each. The class
+              // name and order fields can be used for this. The structure is arbitrary as long as it is unique.
+              resultSource += `?class=${className}&order=${order}`;
             }
 
             (result.warnings ??= []).push(...stylesheetResult.warnings);
@@ -213,7 +221,7 @@ export function createCompilerPlugin(
             }
 
             const { contents, outputFiles, metafile, referencedFiles } = stylesheetResult;
-            additionalResults.set(stylesheetFile ?? containingFile, {
+            additionalResults.set(resultSource, {
               outputFiles,
               metafile,
             });
@@ -476,12 +484,20 @@ export function createCompilerPlugin(
       build.onLoad(
         { filter: /\.[cm]?js$/ },
         createCachedLoad(pluginOptions.loadResultCache, async (args) => {
+          let request = args.path;
+          if (pluginOptions.fileReplacements) {
+            const replacement = pluginOptions.fileReplacements[path.normalize(args.path)];
+            if (replacement) {
+              request = path.normalize(replacement);
+            }
+          }
+
           return profileAsync(
             'NG_EMIT_JS*',
             async () => {
-              const sideEffects = await hasSideEffects(args.path);
+              const sideEffects = await hasSideEffects(request);
               const contents = await javascriptTransformer.transformFile(
-                args.path,
+                request,
                 pluginOptions.jit,
                 sideEffects,
               );
@@ -489,12 +505,38 @@ export function createCompilerPlugin(
               return {
                 contents,
                 loader: 'js',
+                watchFiles: request !== args.path ? [request] : undefined,
               };
             },
             true,
           );
         }),
       );
+
+      // Add a load handler if there are file replacement option entries for JSON files
+      if (
+        pluginOptions.fileReplacements &&
+        Object.keys(pluginOptions.fileReplacements).some((value) => value.endsWith('.json'))
+      ) {
+        build.onLoad(
+          { filter: /\.json$/ },
+          createCachedLoad(pluginOptions.loadResultCache, async (args) => {
+            const replacement = pluginOptions.fileReplacements?.[path.normalize(args.path)];
+            if (replacement) {
+              return {
+                contents: await import('fs/promises').then(({ readFile }) =>
+                  readFile(path.normalize(replacement)),
+                ),
+                loader: 'json' as const,
+                watchFiles: [replacement],
+              };
+            }
+
+            // If no replacement defined, let esbuild handle it directly
+            return null;
+          }),
+        );
+      }
 
       // Setup bundling of component templates and stylesheets when in JIT mode
       if (pluginOptions.jit) {
